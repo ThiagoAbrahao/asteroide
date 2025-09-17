@@ -10,7 +10,7 @@
 
 Neste projeto desenvolvi um jogo inspirado no "Asteroids", um jogo de arcade com gráficos vetoriais muito popular lançado em 1979 pela Atari. Desenvolvi como um projeto pessoal com o intuito de aplicar meus conhecimentos adquiridos na faculdade, principalmente sobre a matéria de álgebra linear e geometria analítica, que utiliza muito vetores, movimentos circulares, ângulos, dentre outros assuntos. Foi meu primeiro projeto nesse sentido. 
 
-Foram usadas as bibliotecas "pygame" para a criação do jogo, "math" para utilizar a parte da logíca matemática e "randon" para trabalhar evendos randômicos. Foi utilizado também a extenção do pyinstaller para empacota o código e todas as suas dependências (bibliotecas e módulos) num único arquivo executável ou numa pasta, tornando a distribuição do aplicativo mais simples de ser usado, não havendo a necessidade de um ambiente em python para rodar o programa.
+Foram usadas as bibliotecas "pygame" para a criação do jogo, "math" para utilizar a parte da lógica matemática e "randon" para trabalhar eventos randômicos. Foi utilizado também a extenção do pyinstaller para empacota o código e todas as suas dependências (bibliotecas e módulos) num único arquivo executável ou numa pasta, tornando a distribuição do aplicativo mais simples de ser usado, não havendo a necessidade de um ambiente em python para rodar o programa.
 
 ## INSTALAÇÃO:
 
