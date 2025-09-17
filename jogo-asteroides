@@ -1,0 +1,326 @@
+import pygame
+import math
+import random
+
+pygame.init()
+pygame.mixer.init()  # Inicializa o mixer de áudio
+screen = pygame.display.set_mode((1280, 720))
+clock = pygame.time.Clock()
+running = True
+dt = 0
+
+#JOGO
+
+game_state = 'start_screen'
+font = pygame.font.Font(None, 74)
+score_font = pygame.font.Font(None, 36)
+
+# --- PONTUAÇÃO E NÍVEIS ---
+score = 0
+level = 1
+score_to_next_level = 100
+
+
+try:
+    player_img = pygame.image.load('nave.png').convert_alpha()
+except pygame.error as e:
+    print(f"Não foi possível carregar a imagem 'nave.png': {e}")
+    player_img = pygame.Surface((40, 40))
+    player_img.fill((255, 0, 0))
+
+# --- TAMANHO DO JOGADOR ---
+novo_tamanho = (45, 45)
+player_img = pygame.transform.scale(player_img, novo_tamanho)
+
+
+# --- IMAGEM DO INIMIGO ---
+try:
+    enemy_img_original = pygame.image.load('asteroides.png').convert_alpha()
+except pygame.error as e:
+    print(f"Não foi possível carregar a imagem 'asteroides.jpg': {e}")
+    enemy_img_original = None
+
+
+# --- SONS ---
+try:
+
+    shoot_sound = pygame.mixer.Sound('tiro.mp3')
+except pygame.error as e:
+    print(f"Não foi possível carregar o som 'tiro.mp3': {e}")
+    shoot_sound = None
+
+
+# --- MUSICA ---
+try:
+    pygame.mixer.music.load('musica_inicial.mp3')
+    pygame.mixer.music.set_volume(0.4)
+except pygame.error as e:
+    print(f"Não foi possível carregar a musica 'musica_inicial.mp3': {e}")
+
+
+
+player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
+player_angle = 0
+rotation_speed = 143
+movement_speed = 143
+
+# --- INIMIGOS ---
+enemies = []
+ENEMY_SIZES = (25, 40, 65)
+ENEMY_COLOR = (150, 60, 200)
+spawn_delay = 900
+
+# Cria um evento customizado para gerar inimigos
+SPAWN_ENEMY = pygame.USEREVENT + 1
+pygame.time.set_timer(SPAWN_ENEMY, spawn_delay)
+
+
+# --- TIROS ---
+bullets = []
+BULLET_SPEED = 400
+BULLET_COLOR = (255, 255, 0)
+BULLET_SIZE = 7
+shoot_cooldown = 600
+last_shot_time = 0
+
+
+# --- CONTROLE DA MÚSICA DE FUNDO ---
+music_started = False
+
+
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+        if game_state == 'start_screen' or game_state == 'game_over':
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
+                if game_state == 'start_screen':
+                    pygame.mixer.music.stop()
+                    music_started = False
+
+                # Reinicia todas as variáveis do jogo para o estado inicial
+                game_state = 'playing'
+                score = 0
+                level = 1
+                score_to_next_level = 100
+                player_pos = pygame.Vector2(screen.get_width() / 2, screen.get_height() / 2)
+                player_angle = 0
+                enemies.clear()
+                bullets.clear()
+                spawn_delay = 900
+                shoot_cooldown = 1000
+                pygame.time.set_timer(SPAWN_ENEMY, spawn_delay)
+
+        # Só gera inimigos se o jogo estiver rodando
+        if game_state == 'playing' and event.type == SPAWN_ENEMY:
+            edge = random.choice(['top', 'bottom', 'left', 'right'])
+            stage = 2
+            size = ENEMY_SIZES[stage]
+
+            # --- DIFICULDADE PROGRESSIVA: VELOCIDADE DOS INIMIGOS ---
+            speed_min = 50 + (level - 1) * 10
+            speed_max = 100 + (level - 1) * 15
+            side_speed_max = 100 + (level - 1) * 10
+
+            if edge == 'top':
+                pos = pygame.Vector2(random.randint(0, screen.get_width() - size), -size)
+                velocity = pygame.Vector2(random.randint(-side_speed_max, side_speed_max),
+                                          random.randint(speed_min, speed_max))
+            elif edge == 'bottom':
+                pos = pygame.Vector2(random.randint(0, screen.get_width() - size), screen.get_height())
+                velocity = pygame.Vector2(random.randint(-side_speed_max, side_speed_max),
+                                          -random.randint(speed_min, speed_max))
+            elif edge == 'left':
+                pos = pygame.Vector2(-size, random.randint(0, screen.get_height() - size))
+                velocity = pygame.Vector2(random.randint(speed_min, speed_max),
+                                          random.randint(-side_speed_max, side_speed_max))
+            elif edge == 'right':
+                pos = pygame.Vector2(screen.get_width(), random.randint(0, screen.get_height() - size))
+                velocity = pygame.Vector2(-random.randint(speed_min, speed_max),
+                                          random.randint(-side_speed_max, side_speed_max))
+
+            enemy_rect = pygame.Rect(pos.x, pos.y, size, size)
+
+            # Redimensionamento da imagem do asteroide
+            enemy_image_scaled = None
+            if enemy_img_original:
+                enemy_image_scaled = pygame.transform.scale(enemy_img_original, (size, size))
+
+            enemies.append({'rect': enemy_rect, 'velocity': velocity, 'stage': stage, 'image': enemy_image_scaled})
+
+    screen.fill("black")
+
+    if game_state == 'playing':
+        # --- LÓGICA DO JOGADOR ---
+        keys = pygame.key.get_pressed()
+
+        # Rotação
+        if keys[pygame.K_a]:
+            player_angle += rotation_speed * dt
+        elif keys[pygame.K_d]:
+            player_angle -= rotation_speed * dt
+
+        # Movimento
+        if keys[pygame.K_w]:
+            angle_rad = math.radians(player_angle)
+            player_pos.x -= math.sin(angle_rad) * movement_speed * dt
+            player_pos.y -= math.cos(angle_rad) * movement_speed * dt
+        elif keys[pygame.K_s]:
+            angle_rad = math.radians(player_angle)
+            player_pos.x += math.sin(angle_rad) * movement_speed * dt
+            player_pos.y += math.cos(angle_rad) * movement_speed * dt
+
+        # Tiro
+        if keys[pygame.K_SPACE]:
+            current_time = pygame.time.get_ticks()
+            if current_time - last_shot_time > shoot_cooldown:
+                last_shot_time = current_time
+                angle_rad = math.radians(player_angle)
+
+                # Toca o som do tiro
+                if shoot_sound:
+                    shoot_sound.play()
+
+                bullet_velocity = pygame.Vector2(-math.sin(angle_rad) * BULLET_SPEED,
+                                                 -math.cos(angle_rad) * BULLET_SPEED)
+                bullet_rect = pygame.Rect(player_pos.x - BULLET_SIZE / 2, player_pos.y - BULLET_SIZE / 2, BULLET_SIZE,
+                                          BULLET_SIZE)
+                bullets.append({'rect': bullet_rect, 'velocity': bullet_velocity})
+
+        player_img_rotated = pygame.transform.rotate(player_img, player_angle)
+        player_rect = player_img_rotated.get_rect(center=player_pos)
+
+        # --- ATUALIZAÇÃO DOS TIROS ---
+        for bullet in bullets:
+            bullet['rect'].x += bullet['velocity'].x * dt
+            bullet['rect'].y += bullet['velocity'].y * dt
+
+        # --- ATUALIZAÇÃO DOS INIMIGOS
+        for enemy in enemies:
+            enemy['rect'].x += enemy['velocity'].x * dt
+            enemy['rect'].y += enemy['velocity'].y * dt
+
+        # --- COLISÃO TIRO-INIMIGO E DIVISÃO ---
+        for bullet in bullets[:]:
+            for enemy in enemies[:]:
+                if bullet in bullets and enemy in enemies and bullet['rect'].colliderect(enemy['rect']):
+                    bullets.remove(bullet)
+                    enemies.remove(enemy)
+
+                    # Adiciona pontos com base no tamanho do inimigo atingido
+                    if enemy['stage'] == 2:
+                        score += 10  # Grande
+                    elif enemy['stage'] == 1:
+                        score += 20  # Médio
+                    else:
+                        score += 50  # Pequeno
+
+                    if enemy['stage'] > 0:
+                        new_stage = enemy['stage'] - 1
+                        new_size = ENEMY_SIZES[new_stage]
+                        for _ in range(2):
+                            velocity_x = random.choice([-1, 1]) * random.randint(50, 100)
+                            velocity_y = random.choice([-1, 1]) * random.randint(50, 100)
+
+                            new_rect = pygame.Rect(enemy['rect'].centerx - new_size / 2,
+                                                   enemy['rect'].centery - new_size / 2, new_size, new_size)
+
+                            new_image_scaled = None
+                            if enemy_img_original:
+                                new_image_scaled = pygame.transform.scale(enemy_img_original, (new_size, new_size))
+
+                            enemies.append({
+                                'rect': new_rect,
+                                'velocity': pygame.Vector2(velocity_x, velocity_y),
+                                'stage': new_stage,
+                                'image': new_image_scaled
+                            })
+                    break
+
+        # --- PROGRESSÃO DE DIFICULDADE ---
+        if score >= score_to_next_level:
+            level += 1
+            score_to_next_level *= 2  # Dobra a pontuação necessária para o próximo nível
+            spawn_delay = max(200, spawn_delay - 100)  # Aumenta a frequência de spawn
+            pygame.time.set_timer(SPAWN_ENEMY, spawn_delay)
+            # Reduz o cooldown do tiro, permitindo atirar mais rápido
+            shoot_cooldown = max(250, shoot_cooldown - 75)
+
+        # --- SISTEMA DE COLISÃO (JOGADOR-INIMIGO) ---
+        for enemy in enemies:
+            if player_rect.colliderect(enemy['rect']):
+                game_state = 'game_over'
+
+                # --- LÓGICA DA MÚSICA DE GAME OVER ---
+                pygame.mixer.music.stop()
+                try:
+                    pygame.mixer.music.load('game_over.mp3')
+                    pygame.mixer.music.play(1)
+                except pygame.error as e:
+                    print(f"Não foi possível carregar ou tocar a música 'game_over.mp3': {e}")
+                break
+
+        # --- DESENHO DOS ELEMENTOS DO JOGO ---
+        score_text = score_font.render(f'Score: {score}', True, (255, 255, 255))
+        level_text = score_font.render(f'Level: {level}', True, (255, 255, 255))
+        screen.blit(score_text, (10, 10))
+        screen.blit(level_text, (10, 40))
+
+        screen.blit(player_img_rotated, player_rect)
+        for bullet in bullets:
+            pygame.draw.rect(screen, BULLET_COLOR, bullet['rect'])
+
+        for enemy in enemies:
+            if enemy['image']:
+                screen.blit(enemy['image'], enemy['rect'])
+            else:
+                pygame.draw.rect(screen, ENEMY_COLOR, enemy['rect'])
+
+        # --- REMOÇÃO DE ELEMENTOS FORA DA TELA ---
+        screen_rect = screen.get_rect()
+        enemies = [enemy for enemy in enemies if screen_rect.colliderect(enemy['rect'])]
+        bullets = [bullet for bullet in bullets if screen_rect.colliderect(bullet['rect'])]
+
+    elif game_state == 'start_screen':
+
+
+        # --- TELA DE INÍCIO ---
+        if not music_started:
+            try:
+                pygame.mixer.music.play(-1)  # O -1 faz a música tocar em loop
+                music_started = True
+            except pygame.error:
+                print("Não foi possível tocar a música.")
+
+        title_text = font.render('NAVE ESPACIAL', True, (255, 255, 255))
+        title_rect = title_text.get_rect(center=(screen.get_width() / 2, screen.get_height() / 2 - 50))
+
+        prompt_text = score_font.render('Pressione ESPAÇO para começar', True, (255, 255, 255))
+        prompt_rect = prompt_text.get_rect(center=(screen.get_width() / 2, screen.get_height() / 2 + 50))
+
+        screen.blit(title_text, title_rect)
+        screen.blit(prompt_text, prompt_rect)
+
+    elif game_state == 'game_over':
+
+        # --- TELA DE GAME OVER ---
+        game_over_text = font.render('GAME OVER', True, (255, 255, 255))
+        game_over_rect = game_over_text.get_rect(center=(screen.get_width() / 2, screen.get_height() / 2 - 50))
+
+        final_score_text = score_font.render(f'Final Score: {score}', True, (255, 255, 255))
+        final_score_rect = final_score_text.get_rect(center=(screen.get_width() / 2, screen.get_height() / 2 + 20))
+
+        restart_text = score_font.render('Pressione ESPAÇO para reiniciar', True, (255, 255, 255))
+        restart_rect = restart_text.get_rect(center=(screen.get_width() / 2, screen.get_height() / 2 + 80))
+
+        screen.blit(game_over_text, game_over_rect)
+        screen.blit(final_score_text, final_score_rect)
+        screen.blit(restart_text, restart_rect)
+
+    pygame.display.flip()
+    dt = clock.tick(60) / 1000
+
+pygame.quit()
+
